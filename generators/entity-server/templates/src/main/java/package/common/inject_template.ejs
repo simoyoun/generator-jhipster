@@ -28,6 +28,9 @@
             const mapsIdRepoInstance = `${mapsIdEntityInstance}Repository`;
             beans.push({class: `${mapsIdEntity}Repository`, instance: mapsIdRepoInstance});
         }
+        if (primaryKey.length > 1 && dto === 'mapstruct') {
+            beans.push({class: `${entityClass}Mapper`, instance: `${entityInstance}Mapper`});
+        }
     } else {
         beans.push({class: `${entityClass}Repository`, instance: `${entityInstance}Repository`});
         if (dto === 'mapstruct') {
@@ -42,6 +45,12 @@
             const mapsIdRepoInstance = `${mapsIdEntityInstance}Repository`;
             beans.push({class: `${mapsIdEntity}Repository`, instance: mapsIdRepoInstance});
         }
+        if (relQueryServices === true) {
+            const distinctRelationships = new Set();
+            // TRACK-1 remove this filter once all entities have criteria and can convert from criteria to specification without queryService
+            relationships.filter(r => r.entity.jpaMetamodelFiltering).forEach(r => distinctRelationships.add(r.otherEntityName));
+            distinctRelationships.forEach(r => beans.push({class: `${_.upperFirst(r)}QueryService`, instance: `${r}QueryService`, lazy: true}))
+        }
     }
     if (saveUserSnapshot && (viaService || constructorName.endsWith('Resource'))) {
         beans.push({class: 'UserRepository', instance: 'userRepository'});
@@ -50,6 +59,6 @@ _%>
 
     <%= beans.map(bean => `private final ${bean.class} ${bean.instance};`).join('\n\n    ') %>
 
-    public <%= constructorName %>(<%= beans.map(bean => `${bean.class} ${bean.instance}`).join(', ') %>) {
+    public <%= constructorName %>(<%= beans.map(bean => `${bean.lazy ? '@Lazy ' : ''}${bean.class} ${bean.instance}`).join(', ') %>) {
         <%= beans.map(bean => `this.${bean.instance} = ${bean.instance};`).join('\n        ') %>
     }

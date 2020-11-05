@@ -21,22 +21,23 @@ let table = [];
 
 // Generate CSV header
 let header = [];
-header.push('id');
 for (idx in fields) {
-    header.push(fields[idx].columnName);
-    if (fields[idx].fieldType === 'byte[]' && fields[idx].fieldTypeBlobContent !== 'text') {
-        header.push(fields[idx].columnName + '_content_type');
+    if (!fields[idx].derivedId) {
+        header.push(fields[idx].columnName);
+        if (fields[idx].fieldType === 'byte[]' && fields[idx].fieldTypeBlobContent !== 'text') {
+            header.push(fields[idx].columnName + '_content_type');
+        }
     }
 }
 for (idx in relationships) {
     const relationshipType = relationships[idx].relationshipType
     if (
-        (relationshipType === "many-to-one"
-            || (relationshipType === "one-to-one" && relationships[idx].ownerSide === true
-               && (relationships[idx].useJPADerivedIdentifier == null || relationships[idx].useJPADerivedIdentifier === false))
-        ) && (relationships[idx].relationshipValidate === true && relationships[idx].relationshipRequired)
+        (relationshipType === "many-to-one" || (relationshipType === "one-to-one" && relationships[idx].ownerSide === true)) &&
+            ((relationships[idx].relationshipValidate === true && relationships[idx].relationshipRequired) || relationships[idx].useJPADerivedIdentifier)
     ) {
-        header.push(getColumnName(relationships[idx].relationshipName) + "_id");
+        relationships[idx].entity.primaryKey.forEach(pk => {
+            header.push(getColumnName(relationships[idx].relationshipName) + "_" + pk.columnName);
+        })
     }
 }
 table.push(header);
@@ -54,47 +55,41 @@ for (idx in relationships) {
     }
 }
 
-// store unique values
-const uniqueValues = {};
-for (idx in fields) {
-    if (fields[idx].fieldValidate === true && fields[idx].fieldValidateRules.includes('unique')) {
-        uniqueValues[idx] = [];
-    }
-}
-
 // Generate CSV rows
 
 for (lineNb = 1; lineNb <= numberOfRows; lineNb++) {
-    let line = [ lineNb ];
+    let line = [];
     for (idx in fields) {
-        let data = fields[idx].generateFakeData();
-        // manage required
-        if (data === undefined) {
-            if (fields[idx].fieldValidateRules.includes('required')) {
-                line = [];
-                break;
+        if (!fields[idx].derivedId) {
+            let data = fields[idx].getFakeValue(lineNb);
+            // manage required
+            if (data === undefined) {
+                if (fields[idx].fieldValidate === true && fields[idx].fieldValidateRules.includes('required')) {
+                    line = [];
+                    break;
+                }
+                data = '';
             }
-            data = '';
-        }
 
-        line.push(data);
-        if (fields[idx].columnType === 'blob' || fields[idx].columnType === 'longblob') {
-            line.push('image/png');
+            line.push(data);
+            if (fields[idx].columnType === 'blob' || fields[idx].columnType === 'longblob') {
+                line.push('image/png');
+            }
         }
     }
 
     for (idx in relationships) {
         const relationshipType = relationships[idx].relationshipType;
         if (
-            (relationshipType === "many-to-one"
-                || (relationshipType === "one-to-one" && relationships[idx].ownerSide === true
-                   && (relationships[idx].useJPADerivedIdentifier == null || relationships[idx].useJPADerivedIdentifier === false))
-            ) && (relationships[idx].relationshipValidate === true && relationships[idx].relationshipRequired)
+            (relationshipType === "many-to-one" || (relationshipType === "one-to-one" && relationships[idx].ownerSide === true)) &&
+                ((relationships[idx].relationshipValidate === true && relationships[idx].relationshipRequired)|| relationships[idx].id || relationships[idx].useJPADerivedIdentifier)
         ) {
             if (relationships[idx].otherEntityNameCapitalized === 'User') {
                 line.push(entity.faker.random.number({min: 1, max: 2}));
             } else {
-                line.push(lineNb);
+                relationships[idx].entity.primaryKey.forEach(pk => {
+                    line.push(pk.field.getFakeValue(lineNb));
+                })
             }
         }
     }

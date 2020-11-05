@@ -954,6 +954,10 @@ const serverFiles = {
                     renameTo: generator => `${generator.javaDir}config/LoggingAspectConfiguration.java`,
                 },
                 { file: 'package/config/WebConfigurer.java', renameTo: generator => `${generator.javaDir}config/WebConfigurer.java` },
+                {
+                    file: 'package/config/MatrixVariableConfiguration.java',
+                    renameTo: generator => `${generator.packageFolder}/config/MatrixVariableConfiguration.java`,
+                },
             ],
         },
         {
@@ -1588,6 +1592,10 @@ const serverFiles = {
                 {
                     file: 'package/domain/User.java',
                     renameTo: generator => `${generator.javaDir}domain/${generator.asEntity('User')}.java`,
+                },
+                {
+                    file: 'package/service/dto/UserCriteria.java',
+                    renameTo: generator => `${generator.javaDir}service/dto/UserCriteria.java`,
                 },
             ],
         },

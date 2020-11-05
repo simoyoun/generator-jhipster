@@ -21,30 +21,69 @@ package <%= packageName %>.service.dto;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import <%= packageName %>.web.rest.TestUtil;
+<%_ const distinctEntitiesToImport = new Set();
+primaryKey.map(pk => pk.entity).filter(e => e.primaryKeyType !== 'Long')
+        .forEach(e => distinctEntitiesToImport.add(e.entityClass));
+entity.fields.filter(f => f.derivedId).forEach(f => {
+    if (f.derivedRelationship.entity.primaryKeyType !== 'Long') {
+        distinctEntitiesToImport.add(f.derivedRelationship.entity.entityClass)
+    }
+});
+distinctEntitiesToImport.forEach(className => { _%>
+import <%= packageName %>.web.rest.<%= className %>ResourceIT;
+<%_ }) _%>
 <%_
-let id1 = getPrimaryKeyValue(primaryKeyType, databaseType, '1');
-let id2 = getPrimaryKeyValue(primaryKeyType, databaseType, '2');
+function initDTO(entity, entityNbr = 1) { _%>
+    <%= asDto(entity.entityClass) %> <%= asDto(entity.entityInstance) %><%= entityNbr %> = new <%= asDto(entity.entityClass) %>();
+    <%_ entity.fields.filter(f => f.id).forEach(f => { _%>
+    <%= asDto(entity.entityInstance) + entityNbr %>.set<%= f.fieldNameCapitalized %>(<%= computeFieldValue(entity, f, entityNbr) %>);
+    <%_ }) _%>
+    <%_ entity.relationships.filter(r => r.id).forEach(r => { _%>
+    <%- initDTO(r.entity, entityNbr); _%>
+    <%= asDto(entity.entityInstance) + entityNbr %>.set<%= r.relationshipNameCapitalized %>(<%= asDto(r.entity.entityInstance) + entityNbr %>);
+    <%_ })
+}
+
+function computeFieldValue(entity, field, entityNbr = 1) {
+    const prefix = entityNbr === 1 ? 'DEFAULT_' : 'UPDATED_';
+    if (field.fieldType === 'Long') {
+        return `${entityNbr}L`;
+    } else {
+        if (field.derivedId) {
+            return `${field.derivedRelationship.entity.entityClass}ResourceIT.${prefix}${_.snakeCase(field.derivedRelationship.otherEntityField).toUpperCase()}`;
+        } else {
+            return `${entity.entityClass}ResourceIT.${prefix}${field.fieldNameUnderscored.toUpperCase()}`;
+        }
+    }
+}
 _%>
-<%_ if (id1.includes('UUID')) { _%>
-import java.util.UUID;
-<%_ } _%>
 
 class <%= asDto(entityClass) %>Test {
 
     @Test
     void dtoEqualsVerifier() throws Exception {
         TestUtil.equalsVerifier(<%= asDto(entityClass) %>.class);
-        <%_if (!embedded) { _%>
-        <%= asDto(entityClass) %> <%= asDto(entityInstance) %>1 = new <%= asDto(entityClass) %>();
-        <%= asDto(entityInstance) %>1.setId(<%- id1 %>);
+        <%_ if (!embedded) { _%>
+        <%- initDTO(this, 1); _%>
         <%= asDto(entityClass) %> <%= asDto(entityInstance) %>2 = new <%= asDto(entityClass) %>();
         assertThat(<%= asDto(entityInstance) %>1).isNotEqualTo(<%= asDto(entityInstance) %>2);
-        <%= asDto(entityInstance) %>2.setId(<%= asDto(entityInstance) %>1.getId());
+<%_ fields.filter(f => f.id).forEach(f => { _%>
+        <%= asDto(entityInstance) %>2.set<%= f.fieldNameCapitalized %>(<%= computeFieldValue(this, f, 1) %>);
+<%_ }) _%>
+<%_ relationships.filter(r => r.id).forEach(r => { _%>
+        <%= asDto(entityInstance) %>2.set<%= r.relationshipNameCapitalized %>(<%= asDto(r.entity.entityInstance) %>1);
+<%_ }) _%>
         assertThat(<%= asDto(entityInstance) %>1).isEqualTo(<%= asDto(entityInstance) %>2);
-        <%= asDto(entityInstance) %>2.setId(<%- id2 %>);
-        assertThat(<%= asDto(entityInstance) %>1).isNotEqualTo(<%= asDto(entityInstance) %>2);
-        <%= asDto(entityInstance) %>1.setId(null);
-        assertThat(<%= asDto(entityInstance) %>1).isNotEqualTo(<%= asDto(entityInstance) %>2);
-        <%_} _%>
+        <%- initDTO(this, 3); _%>
+        assertThat(<%= asDto(entityInstance) %>1).isNotEqualTo(<%= asDto(entityInstance) %>3);
+        <%= asDto(entityClass) %> <%= asDto(entityInstance) %>4 = new <%= asDto(entityClass) %>();
+<%_ fields.filter(f => f.id).forEach(f => { _%>
+        <%= asDto(entityInstance) %>4.set<%= f.fieldNameCapitalized %>(null);
+<%_ }) _%>
+<%_ relationships.filter(r => r.id).forEach(r => { _%>
+        <%= asDto(entityInstance) %>4.set<%= r.relationshipNameCapitalized %>(null);
+<%_ }) _%>
+        assertThat(<%= asDto(entityInstance) %>1).isNotEqualTo(<%= asDto(entityInstance) %>4);
+        <%_ } _%>
     }
 }

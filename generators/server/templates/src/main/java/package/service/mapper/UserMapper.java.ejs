@@ -29,7 +29,7 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import org.mapstruct.*;
+import org.mapstruct.Named;
 
 /**
  * Mapper for the entity {@link <%= asEntity('User') %>} and its DTO called {@link <%= asDto('User') %>}.
@@ -39,6 +39,27 @@ import org.mapstruct.*;
  */
 @Service
 public class UserMapper {
+
+    @Named("id")
+    public <%= asDto('User') %> toDtoId(<%= asEntity('User') %> user) {
+        if (user == null) {
+            return null;
+        }
+        <%= asDto('User') %> userDTO = new <%= asDto('User') %>();
+        userDTO.setId(user.getId());
+        return userDTO;
+    }
+
+    @Named("login")
+    public <%= asDto('User') %> toDtoLogin(<%= asEntity('User') %> user) {
+        if (user == null) {
+            return null;
+        }
+        <%= asDto('User') %> userDTO = new <%= asDto('User') %>();
+        userDTO.setId(user.getId());
+        userDTO.setLogin(user.getLogin());
+        return userDTO;
+    }
 
     public List<<%= asDto('User') %>> usersToUserDTOs(List<<%= asEntity('User') %>> users) {
         return users.stream()
@@ -123,31 +144,5 @@ public class UserMapper {
         <%= asEntity('User') %> user = new <%= asEntity('User') %>();
         user.setId(id);
         return user;
-    }
-
-    @Named("id")
-    @BeanMapping(ignoreByDefault = true)
-    @Mapping(target = "id", source = "id")
-    public <%= asDto('User') %> toDtoId(<%= asEntity('User') %> user) {
-        if (user == null) {
-            return null;
-        }
-        <%= asDto('User') %> userDto = new <%= asDto('User') %>();
-        userDto.setId(user.getId());
-        return userDto;
-    }
-
-    @Named("login")
-    @BeanMapping(ignoreByDefault = true)
-    @Mapping(target = "id", source = "id")
-    @Mapping(target = "login", source = "login")
-    public <%= asDto('User') %> toDtoLogin(<%= asEntity('User') %> user) {
-        if (user == null) {
-            return null;
-        }
-        <%= asDto('User') %> userDto = new <%= asDto('User') %>();
-        userDto.setId(user.getId());
-        userDto.setLogin(user.getLogin());
-        return userDto;
     }
 }

@@ -65,6 +65,9 @@ import java.util.List;
 import java.util.Optional;
     <%_ } _%>
 <%_ } _%>
+<%_ if (primaryKey.length > 1) { _%>
+import <%=packageName%>.domain.<%=primaryKeyType%>;
+<%_ } _%>
 <%_ if (primaryKeyType === 'UUID') { _%>
 
 import java.util.UUID;

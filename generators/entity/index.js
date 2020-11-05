@@ -27,7 +27,7 @@ const BaseBlueprintGenerator = require('../generator-base-blueprint');
 const constants = require('../generator-constants');
 const statistics = require('../statistics');
 const { isReservedClassName, isReservedTableName } = require('../../jdl/jhipster/reserved-keywords');
-const { prepareEntityForTemplates, loadRequiredConfigIntoEntity } = require('../../utils/entity');
+const { prepareEntityForTemplates, loadRequiredConfigIntoEntity, computePrimaryKeyIfNotComputed } = require('../../utils/entity');
 const { prepareFieldForTemplates } = require('../../utils/field');
 const { prepareRelationshipForTemplates } = require('../../utils/relationship');
 const { stringify } = require('../../utils');
@@ -492,7 +492,6 @@ class EntityGenerator extends BaseBlueprintGenerator {
                 }
             },
             shareEntity() {
-                this.configOptions.sharedEntities = this.configOptions.sharedEntities || {};
                 this.configOptions.sharedEntities[this.context.name] = this.context;
             },
         };
@@ -513,7 +512,6 @@ class EntityGenerator extends BaseBlueprintGenerator {
                 this.context.fields.forEach(field => {
                     prepareFieldForTemplates(entity, field, this);
                 });
-                this.context.fieldsNoId = this.context.fields.filter(field => !field.id);
             },
         };
     }
@@ -539,25 +537,6 @@ class EntityGenerator extends BaseBlueprintGenerator {
                     const otherEntityName = this._.upperFirst(relationship.otherEntityName);
                     relationship.otherEntity = this.configOptions.sharedEntities[otherEntityName];
                 });
-            },
-
-            processPrimaryKeyWithRelationships() {
-                if (!this.context.derivedPrimaryKey) {
-                    return;
-                }
-                const derivedRelationship = this.context.relationships.find(relationship => relationship.useJPADerivedIdentifier === true);
-                if (!derivedRelationship) {
-                    throw new Error(`Error creating primary key for entity ${this.context.name}`);
-                }
-                if (derivedRelationship.otherEntity.idFields.length > 1) {
-                    throw new Error(`Error creating primary key for entity ${this.context.name} only single id is supported for derivedId`);
-                }
-                const idFields = derivedRelationship.otherEntity.idFields.map(field => {
-                    return { ...field, fieldName: 'id', fieldNameHumanized: 'ID' };
-                });
-                this.context.idFields = idFields;
-                this.context.fields.unshift(...idFields);
-                this.context.primaryKeyType = derivedRelationship.otherEntity.primaryKeyType;
             },
 
             prepareRelationshipsForTemplates() {
@@ -610,6 +589,10 @@ class EntityGenerator extends BaseBlueprintGenerator {
                 this.context.reactiveRegularEagerRelations = this.context.reactiveEagerRelations.filter(
                     rel => rel.useJPADerivedIdentifier !== true
                 );
+            },
+
+            computePrimaryKeyIfNotComputed() {
+                computePrimaryKeyIfNotComputed(this.context, this);
             },
 
             /*

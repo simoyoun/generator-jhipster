@@ -31,32 +31,35 @@
             ownerSide = relationships[idx].ownerSide,
             otherEntityTableName = relationships[idx].otherEntityTableName;
             if (relationshipType === 'many-to-one' || (relationshipType === 'one-to-one' && ownerSide)) {
-                const constraintName = getFKConstraintName(entity.entityTableName, relationshipName, prodDatabaseType);
-                let baseColumnName = getColumnName(relationshipName) + '_id';
-                if (relationshipType === 'one-to-one' && ownerSide && relationships[idx].useJPADerivedIdentifier === true) {
-                    baseColumnName = 'id';
-                } %>
-        <addForeignKeyConstraint baseColumnNames="<%= baseColumnName %>"
+                    const constraintName = getFKConstraintName(entity.entityTableName, relationshipName, prodDatabaseType);
+                    let referencedColumnNames = relationships[idx].entity.primaryKey.map(pk => pk.columnName).join(',');
+                    let baseColumnNames = relationships[idx].entity.primaryKey.map(pk => `${getColumnName(relationshipName)}_${pk.columnName}`).join(',');
+                    %>
+        <addForeignKeyConstraint baseColumnNames="<%= baseColumnNames %>"
                                  baseTableName="<%= entity.entityTableName %>"
                                  constraintName="<%= constraintName %>"
-                                 referencedColumnNames="id"
+                                 referencedColumnNames="<%= referencedColumnNames %>"
                                  referencedTableName="<%= otherEntityTableName %>"/>
         <%_ } else if (relationships[idx].shouldCreateJoinTable) {
                 const joinTableName = getJoinTableName(entity.entityTableName, relationshipName, prodDatabaseType);
                 const constraintName = getFKConstraintName(joinTableName, getColumnName(entity.entityTableName), prodDatabaseType, true);
                 const otherEntityConstraintName = getFKConstraintName(joinTableName, getColumnName(relationshipName), prodDatabaseType, true);
+                ownerSideReferencedColumnsNames = entity.primaryKey.map(pk => pk.columnName).join(',')
+                otherSideReferencedColumnsNames = relationships[idx].entity.primaryKey.map(pk => pk.columnName).join(',');
+                ownerSideBaseColumnNames = entity.primaryKey.map(pk => `${getColumnName(entity.name)}_${pk.columnName}`).join(',');
+                otherSideBaseColumnNames = relationships[idx].entity.primaryKey.map(pk => `${getColumnName(relationshipName)}_${pk.columnName}`).join(',');
           _%>
 
-        <addForeignKeyConstraint baseColumnNames="<%= getColumnName(entity.name) %>_id"
+        <addForeignKeyConstraint baseColumnNames="<%= ownerSideBaseColumnNames %>"
                                  baseTableName="<%= joinTableName %>"
                                  constraintName="<%= constraintName %>"
-                                 referencedColumnNames="id"
+                                 referencedColumnNames="<%= ownerSideReferencedColumnsNames %>"
                                  referencedTableName="<%= entity.entityTableName %>"/>
 
-        <addForeignKeyConstraint baseColumnNames="<%= getColumnName(relationshipName) %>_id"
+        <addForeignKeyConstraint baseColumnNames="<%= otherSideBaseColumnNames %>"
                                  baseTableName="<%= joinTableName %>"
                                  constraintName="<%= getColumnName(otherEntityConstraintName) %>"
-                                 referencedColumnNames="id"
+                                 referencedColumnNames="<%= otherSideReferencedColumnsNames %>"
                                  referencedTableName="<%= otherEntityTableName %>"/>
         <%  } %><% } %>
     </changeSet>

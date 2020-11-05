@@ -24,6 +24,7 @@ const cleanup = require('../cleanup');
 const prompts = require('./prompts');
 const packagejs = require('../../package.json');
 const statistics = require('../statistics');
+const { computePrimaryKeyIfNotComputed } = require('../../utils/entity');
 const { appDefaultConfig } = require('../generator-defaults');
 const { JHIPSTER_CONFIG_DIR } = require('../generator-constants');
 
@@ -405,6 +406,50 @@ module.exports = class JHipsterAppGenerator extends BaseBlueprintGenerator {
                 this.blueprints && (config.blueprints = this.blueprints);
                 this.blueprintVersion && (config.blueprintVersion = this.blueprintVersion);
                 this.config.set(config);
+            },
+
+            prepareSharedEntities() {
+                const userEntity = {
+                    name: 'User',
+                    entityTableName: `${this.getTableName(this.jhipsterConfig.jhiPrefix)}_user`,
+                    entityNameCapitalized: 'User',
+                    fields: [
+                        {
+                            fieldName: 'id',
+                            fieldType:
+                                this.jhipsterConfig.databaseType === 'sql' && this.jhipsterConfig.authenticationType !== 'oauth2'
+                                    ? 'Long'
+                                    : 'String',
+                            columnType:
+                                this.jhipsterConfig.databaseType === 'sql' && this.jhipsterConfig.authenticationType !== 'oauth2'
+                                    ? 'bigint'
+                                    : 'varchar(100)',
+                            loadColumnType:
+                                this.jhipsterConfig.databaseType === 'sql' && this.jhipsterConfig.authenticationType !== 'oauth2'
+                                    ? 'numeric'
+                                    : 'string',
+                            id: true,
+                            autoIncrement:
+                                this.jhipsterConfig.databaseType === 'sql' && this.jhipsterConfig.authenticationType !== 'oauth2',
+                        },
+                        {
+                            fieldName: 'username',
+                            fieldType: 'String',
+                            columnType: 'varchar(50)',
+                            loadColumnType: 'string',
+                        },
+                    ],
+                    relationships: [],
+                    primaryKeyType:
+                        this.jhipsterConfig.databaseType === 'sql' && this.jhipsterConfig.authenticationType !== 'oauth2'
+                            ? 'Long'
+                            : 'String',
+                    primaryKeyName: 'id',
+                };
+                this.configOptions.sharedEntities = {
+                    User: userEntity,
+                };
+                computePrimaryKeyIfNotComputed(userEntity, this);
             },
 
             composeEntities() {

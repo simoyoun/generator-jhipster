@@ -34,38 +34,35 @@ import tech.jhipster.service.filter.ZonedDateTimeFilter;
 
 <%_
 const referenceFilterType = '' + primaryKeyType + 'Filter';
-var filterVariables = [{name:'id', type: primaryKeyType, filterType:referenceFilterType,fieldInJavaBeanMethod:'Id' } ];
+  var filterVariables = [];
 var extraFilters = {};
-fields.forEach((field) => {
-const fieldType = field.fieldType;
-if (isFilterableType(fieldType)) {
-    var filterType;
-    if (field.fieldIsEnum == true) {
-    filterType = fieldType + 'Filter';
-    extraFilters[fieldType] = {type: filterType, superType: 'Filter<' + fieldType + '>', fieldType: fieldType};
-    } else if (['Duration', 'UUID', 'LocalDate', 'ZonedDateTime', 'Instant', 'String', 'Long', 'Integer', 'Float', 'Double', 'BigDecimal', 'Boolean'].includes(fieldType)) {
-    filterType = fieldType + 'Filter';
-    } else {
-    filterType = 'Filter<' + fieldType + '>';
+
+  fields.forEach((field) => {
+    const fieldType = field.fieldType;
+    if (isFilterableType(fieldType)) {
+      var filterType;
+      if (field.fieldIsEnum == true) {
+        filterType = fieldType + 'Filter';
+        extraFilters[fieldType] = {type: filterType, superType: 'Filter<' + fieldType + '>', fieldType: fieldType};
+      } else if (['Duration', 'UUID', 'LocalDate', 'ZonedDateTime', 'Instant', 'String', 'Long', 'Integer', 'Float', 'Double', 'BigDecimal', 'Boolean'].includes(fieldType)) {
+        filterType = fieldType + 'Filter';
+      } else {
+        filterType = 'Filter<' + fieldType + '>';
+      }
+      filterVariables.push( { filterType : filterType,
+            name: field.fieldName,
+            type: fieldType,
+            fieldInJavaBeanMethod: field.fieldInJavaBeanMethod });
     }
-    filterVariables.push( { filterType : filterType,
-        name: field.fieldName,
-        type: fieldType,
-        fieldInJavaBeanMethod: field.fieldInJavaBeanMethod });
-}
-});
-relationships.forEach((relationship) => {
-const relationshipType = relationship.relationshipType;
-// user has a String PK when using OAuth, so change relationships accordingly
-let oauthAwareReferenceFilterType = referenceFilterType;
-if (relationship.otherEntityName === 'user' && authenticationType === 'oauth2') {
-    oauthAwareReferenceFilterType = 'StringFilter';
-}
-filterVariables.push({ filterType : oauthAwareReferenceFilterType,
-    name: relationship.relationshipFieldName + 'Id',
-    type: relationshipType,
-    fieldInJavaBeanMethod: relationship.relationshipNameCapitalized + 'Id' });
-});
+  });
+  // TRACK-1 remove this filter once all entities have criteria and can convert from criteria to specification without queryService
+  relationships.filter(r => r.entity.jpaMetamodelFiltering).forEach((relationship) => {
+      const relationshipType = relationship.relationshipType;
+      filterVariables.push({ filterType : `${relationship.otherEntityNameCapitalized}Criteria`,
+          name: relationship.relationshipFieldName,
+          type: relationshipType,
+          fieldInJavaBeanMethod: relationship.relationshipNameCapitalized });
+  });
 _%>
 /**
  * Criteria class for the {@link <%= packageName %>.domain.<%= asEntity(entityClass) %>} entity. This class is used
@@ -139,14 +136,7 @@ public class <%= entityClass %>Criteria implements Serializable, Criteria {
             return false;
         }
         final <%= entityClass %>Criteria that = (<%= entityClass %>Criteria) o;
-        return
-<%_ filterVariables.forEach((filterVariable, index) => { _%>
-    <%_ if (filterVariables.length === index + 1) { _%>
-            Objects.equals(<%= filterVariable.name %>, that.<%= filterVariable.name %>);
-    <%_ } else { _%>
-            Objects.equals(<%= filterVariable.name %>, that.<%= filterVariable.name %>) &&
-    <%_ } _%>
-<%_ }); _%>
+        return <%- filterVariables.map(filterVariable => 'Objects.equals(' + filterVariable.name +', that.' + filterVariable.name +')').join(' &&\n            ') _%>;
     }
 
     @Override
@@ -154,9 +144,9 @@ public class <%= entityClass %>Criteria implements Serializable, Criteria {
         return Objects.hash(
 <%_ filterVariables.forEach((filterVariable, index) => { _%>
     <%_ if (filterVariables.length === (index + 1)) { _%>
-        <%= filterVariable.name %>
+            <%= filterVariable.name %>
     <%_ } else { _%>
-        <%= filterVariable.name %>,
+            <%= filterVariable.name %>,
     <%_ } _%>
 <%_ }); _%>
         );
@@ -167,7 +157,7 @@ public class <%= entityClass %>Criteria implements Serializable, Criteria {
     public String toString() {
         return "<%= entityClass %>Criteria{" +
 <%_ filterVariables.forEach((field) => { _%>
-                (<%= field.name %> != null ? "<%= field.name %>=" + <%= field.name %> + ", " : "") +
+            (<%= field.name %> != null ? "<%= field.name %>=" + <%= field.name %> + ", " : "") +
 <%_ }); _%>
             "}";
     }

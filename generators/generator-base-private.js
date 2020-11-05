@@ -1237,6 +1237,94 @@ module.exports = class JHipsterBasePrivateGenerator extends Generator {
     }
 
     /**
+     * add the id field if needed
+     *
+     * @param {string} databaseType - the database type
+     * @param {any} entity - the entity to compute the database type for
+     */
+    initIdField(entity, databaseType) {
+        if (entity.compositeId !== undefined) {
+            return; // idField already initialized
+        }
+        const idFields = entity.fields.filter(field => field.id);
+        const idRelationships = entity.relationships.filter(r => r.options && r.options.id && r.relationshipType === 'many-to-one');
+        const derivedRelationship = entity.relationships.find(
+            r => r.useJPADerivedIdentifier || (r.options && r.options.id && r.relationshipType === 'one-to-one' && r.ownerSide)
+        );
+        const idLength = idFields.length + idRelationships.length;
+        if (idLength && derivedRelationship) {
+            throw new Error('an entity can not have and id and a jpaDerived identifier');
+        }
+        if (derivedRelationship && derivedRelationship.compositeId === undefined) {
+            derivedRelationship.entity = this.configOptions.sharedEntities[_.upperFirst(derivedRelationship.otherEntityName)];
+            this.initIdField(derivedRelationship.entity, databaseType);
+            entity.compositeId = derivedRelationship.entity.compositeId;
+            entity.primaryKeyType = derivedRelationship.entity.primaryKeyType;
+            entity.primaryKeyName = `${derivedRelationship.relationshipName}${_.upperFirst(derivedRelationship.entity.primaryKeyName)}`;
+            if (!entity.compositeId) {
+                const idField = {
+                    fieldName: entity.primaryKeyName,
+                    fieldType: entity.primaryKeyType,
+                    id: true,
+                    options: {
+                        id: true,
+                    },
+                    autoIncrement: entity.databaseType === 'sql',
+                    derivedId: true, // relationship is used instead
+                    derivedRelationship,
+                };
+                entity.fields.unshift(idField);
+            }
+        } else if (idLength === 0) {
+            entity.compositeId = false;
+            entity.primaryKeyType = this.getPkType(entity.databaseType);
+            entity.primaryKeyName = 'id';
+            const idField = {
+                fieldName: entity.primaryKeyName,
+                fieldType: entity.primaryKeyType,
+                id: true,
+                options: {
+                    id: true,
+                },
+                autoIncrement: entity.databaseType === 'sql',
+            };
+            entity.fields.unshift(idField);
+        } else if (idLength > 1) {
+            entity.compositeId = true;
+            entity.primaryKeyType = `${_.upperFirst(entity.name)}Id`;
+            entity.primaryKeyName = 'id';
+        } else if (idFields.length === 1) {
+            entity.compositeId = false;
+            entity.primaryKeyType = idFields[0].fieldType;
+            entity.primaryKeyName = idFields[0].fieldName;
+        } else if (idRelationships.length === 1) {
+            throw new Error('a ManyToOne relationship can not be the unique id of an entity');
+        } else {
+            throw new Error('This should never happen (FAIL SAFE)');
+        }
+    }
+
+    /**
+     * Returns the JDBC URL for a databaseType
+     *
+     * @param {string} databaseType
+     * @param {*} options
+     */
+    getJDBCUrl(databaseType, options = {}) {
+        return this.getDBCUrl(databaseType, 'jdbc', options);
+    }
+
+    /**
+     * Returns the R2DBC URL for a databaseType
+     *
+     * @param {string} databaseType
+     * @param {*} options
+     */
+    getR2DBCUrl(databaseType, options = {}) {
+        return this.getDBCUrl(databaseType, 'r2dbc', options);
+    }
+
+    /**
      * Returns the URL for a particular databaseType and protocol
      *
      * @param {string} databaseType

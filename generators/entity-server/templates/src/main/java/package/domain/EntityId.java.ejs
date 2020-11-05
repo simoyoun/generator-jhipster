@@ -1,0 +1,105 @@
+<%#
+ Copyright 2013-2019 the original author or authors from the JHipster project.
+
+ This file is part of the JHipster project, see https://www.jhipster.tech/
+ for more information.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-%>
+package <%=packageName%>.domain;
+import javax.persistence.Column;
+import javax.persistence.Embeddable;
+<%_ if (validation) { _%>
+import javax.validation.constraints.*;
+<%_ } _%>
+import java.util.Objects;
+
+@Embeddable
+public class <%= entityClass %>Id implements java.io.Serializable {
+<%_
+// here we lie to the field_validators code because it was coded to expect fields[idx] to contain the validation info
+const realFields = fields;
+fields = primaryKey.map(pk => pk.field);
+for (idx in primaryKey) { _%>
+
+    <%_ if (primaryKey[idx].isEnum) { _%>
+    @Enumerated(EnumType.STRING)
+    <%_ }
+    if (fields[idx].fieldValidateRules && fields[idx].fieldValidateRules.includes('required')) {
+        required = true;
+    }
+    const fieldValidateRules = fields[idx].fieldValidateRules;
+    const fieldValidateRulesMinlength = fields[idx].fieldValidateRulesMinlength;
+    const fieldValidateRulesMaxlength = fields[idx].fieldValidateRulesMaxlength;
+    const fieldValidateRulesMinbytes = fields[idx].fieldValidateRulesMinbytes;
+    const fieldValidateRulesMaxbytes = fields[idx].fieldValidateRulesMaxbytes;
+    const fieldValidateRulesMin = fields[idx].fieldValidateRulesMin;
+    const fieldValidateRulesMax = fields[idx].fieldValidateRulesMax;
+    const fieldValidateRulesPatternJava = fields[idx].fieldValidateRulesPatternJava;
+    _%>
+    <%_ if (fieldValidateRules && fieldValidateRules.length > 0) { _%>
+    <%- include('../common/field_validators'); -%>
+    <%_ } _%>
+    @Column(name = "<%= primaryKey[idx].columnName %>"<% if (primaryKey[idx].fieldValidate === true) { %><% if (primaryKey[idx].fieldValidateRules.includes('maxlength')) { %>, length = <%= primaryKey[idx].fieldValidateRulesMaxlength %><% } %><% if (primaryKey[idx].required) { %>, nullable = false<% } %><% if (primaryKey[idx].unique) { %>, unique = true<% } %><% } %>)
+    private <%= primaryKey[idx].field.fieldType %> <%= primaryKey[idx].name %>;
+<%_ }
+// we put back the real value of fields
+fields = realFields; _%>
+
+    public <%= entityClass %>Id(){}
+
+    public <%= entityClass %>Id(<%= primaryKey.map(pk => pk.field.fieldType + ' ' + pk.name).join(', ') %>){
+<%_ for (idx in primaryKey) { _%>
+        this.<%= primaryKey[idx].name %> = <%= primaryKey[idx].name %>;
+<%_ }_%>
+    }
+<%_ for (idx in primaryKey) { _%>
+
+    public <%= primaryKey[idx].field.fieldType %> <%= primaryKey[idx].getter %>(){
+        return this.<%= primaryKey[idx].name %>;
+    }
+
+    public void <%= primaryKey[idx].setter %>(<%= primaryKey[idx].field.fieldType %> <%= primaryKey[idx].name %>){
+        this.<%= primaryKey[idx].name %> = <%= primaryKey[idx].name %>;
+    }
+<%_ }_%>
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof <%= entityClass %>Id)) {
+            return false;
+        }
+
+        <%= entityClass %>Id <%= entityInstance %>Id = (<%= entityClass %>Id) o;
+        return <%- primaryKey.map(f => `Objects.equals(${f.name}, ${entityInstance}Id.${f.name})`).join('\n            && ') %>;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(<%= primaryKey.map(f => f.name).join(', ')%>);
+    }
+
+    // prettier-ignore
+    @Override
+    public String toString() {
+        return "<%= entityClass %>Id{" +
+            <%_ for (idx in primaryKey) {
+                const isNumeric = ['integer', 'long', 'float', 'double', 'bigdecimal'].includes(primaryKey[idx].field.fieldType.toLowerCase()); _%>
+            ", <%= primaryKey[idx].name %>=<% if (! isNumeric) {%>'<% } %>" + <%= primaryKey[idx].getter %>() <% if (! isNumeric) { %>+ "'" <% } %>+
+            <%_ } _%>
+            "}";
+    }
+}

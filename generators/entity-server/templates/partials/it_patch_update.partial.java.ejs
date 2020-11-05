@@ -26,8 +26,13 @@ int databaseSizeBeforeUpdate = <%= entityInstance %>Repository.findAll()<%= call
 
 // Update the <%= entityInstance %> using partial update
 <%= asEntity(entityClass) %> partialUpdated<%= asEntity(entityClass) %> = new <%= asEntity(entityClass) %>();
-partialUpdated<%= asEntity(entityClass) %>.setId(<%= asEntity(entityInstance) %>.getId());
-<%_ fieldsToUpdate = fields.filter(field => field.includeField) %>
+<%_ fields.filter(f => f.id).forEach(f => { _%>
+partialUpdated<%= asEntity(entityClass) %>.set<%= f.fieldNameCapitalized %>(<%= asEntity(entityInstance) %>.get<%= f.fieldNameCapitalized %>());
+<%_ }) _%>
+<%_ relationships.filter(r => r.id || r.useJPADerivedIdentifier).forEach(r => { _%>
+partialUpdated<%= asEntity(entityClass) %>.set<%= r.relationshipNameCapitalized %>(<%= asEntity(entityInstance) %>.get<%= r.relationshipNameCapitalized %>());
+<%_ }) _%>
+<%_ fieldsToUpdate = patchFields.filter(field => field.includeField) %>
 <%_ if (fluentMethods && fieldsToUpdate.length > 0) { _%>
     partialUpdated<%= asEntity(entityClass) %><% for (field of fieldsToUpdate) { %>
         .<%= field.fieldName %>(<%= 'UPDATED_' + field.fieldNameUnderscored.toUpperCase() %>)<% if (field.fieldWithContentType) { %>
@@ -66,7 +71,7 @@ SecurityContextHolder.setContext(TestSecurityContextHolder.getContext());
 List<<%= asEntity(entityClass) %>> <%= entityInstance %>List = <%= entityInstance %>Repository.findAll()<%= callListBlock %>;
 assertThat(<%= entityInstance %>List).hasSize(databaseSizeBeforeUpdate);
 <%= asEntity(entityClass) %> test<%= entityClass %> = <%= entityInstance %>List.get(<%= entityInstance %>List.size() - 1);
-<%_ for (field of fields) { if (field.fieldType === 'ZonedDateTime') { _%>
+<%_ for (field of patchFields) { if (field.fieldType === 'ZonedDateTime') { _%>
     assertThat(test<%= entityClass %>.get<%= field.fieldInJavaBeanMethod %>()).isEqualTo(<%= field.testWithConstant %>);
 <%_ } else if ((field.fieldType === 'byte[]' || field.fieldType === 'ByteBuffer') && field.fieldTypeBlobContent !== 'text') { _%>
     assertThat(test<%= entityClass %>.get<%= field.fieldInJavaBeanMethod %>()).isEqualTo(<%= field.testWithConstant %>);

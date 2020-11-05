@@ -246,6 +246,7 @@ function prepareRelationshipForTemplates(entityWithConfig, relationship, generat
     }
     entityWithConfig.differentRelationships[entityType].push(relationship);
     relationship.reference = relationshipToReference(entityWithConfig, relationship);
+    relationship.entity = generator.configOptions.sharedEntities[relationship.otherEntityNameCapitalized];
     return relationship;
 }
 

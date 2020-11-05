@@ -51,9 +51,6 @@ module.exports = class extends BaseGenerator {
                     throw new Error(`Shared entity ${databaseChangelog.entityName} was not found`);
                 }
 
-                // Remove fields with custom ids, drop once templates supports them
-                this.entity = { ...this.entity, fields: this.entity.fieldsNoId };
-
                 if (databaseChangelog.type === 'entity-new') {
                     this.fields = this.entity.fields.map(field => this._prepareFieldForTemplates(this.entity, field));
                     this.relationships = this.entity.relationships.map(relationship =>
@@ -229,7 +226,7 @@ module.exports = class extends BaseGenerator {
         field.loadColumnType = this._loadColumnType(entity, field);
         field.shouldDropDefaultValue = field.fieldType === 'ZonedDateTime' || field.fieldType === 'Instant';
         field.shouldCreateContentType = field.fieldType === 'byte[]' && field.fieldTypeBlobContent !== 'text';
-        field.nullable = !(field.fieldValidate === true && field.fieldValidateRules.includes('required'));
+        field.nullable = !(field.fieldValidate === true && field.fieldValidateRules.includes('required')) && !field.id;
         return field;
     }
 

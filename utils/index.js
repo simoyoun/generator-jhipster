@@ -25,7 +25,7 @@ module.exports = {
                 if (key === 'faker') {
                     return '[faker]';
                 }
-                if (key === 'otherEntity' && value) {
+                if ((key === 'otherEntity' || key === 'entity') && value) {
                     return `[${value.name} Entity]`;
                 }
                 if (key === 'otherRelationship' && value) {

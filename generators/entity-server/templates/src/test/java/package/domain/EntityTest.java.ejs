@@ -21,6 +21,17 @@ package <%= packageName %>.domain;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import <%= packageName %>.web.rest.TestUtil;
+<%_ const distinctEntitiesToImport = new Set();
+primaryKey.map(pk => pk.entity).filter(e => e.primaryKeyType !== 'Long')
+        .forEach(e => distinctEntitiesToImport.add(e.entityClass));
+fields.filter(f => f.derivedId).forEach(f => {
+    if (f.derivedRelationship.entity.primaryKeyType !== 'Long') {
+        distinctEntitiesToImport.add(f.derivedRelationship.entity.entityClass)
+    }
+});
+distinctEntitiesToImport.forEach(className => { _%>
+import <%= packageName %>.web.rest.<%= className %>ResourceIT;
+<%_ }) _%>
 <%_
 let hasOauthUser = false;
 
@@ -34,19 +45,33 @@ import java.util.UUID;
 
 class <%= entityClass %>Test {
 
+<%_
+function computeValue(entity, entityNbr = 1) {
+    const prefix = entityNbr === 1 ? 'DEFAULT_' : 'UPDATED_';
+    if (entity.compositeId) {
+        return `new ${entity.entityClass}Id(${entity.primaryKey.map(pk => pk.field.fieldType === 'Long' ? `${entityNbr}L` : pk.entity.entityClass + 'ResourceIT.' + prefix + pk.field.fieldNameUnderscored.toUpperCase()).join(', ')})`;
+    } else if (entity.primaryKeyType === 'Long') {
+        return `${entityNbr}L`;
+    } else {
+        const field = entity.primaryKey[0].field.derivedId ? entity.primaryKey[0].field.derivedRelationship.entity.primaryKey[0].field : entity.primaryKey[0].field;
+        const resourceIt = entity.primaryKey[0].field.derivedId ? `${entity.primaryKey[0].field.derivedRelationship.entity.entityClass}ResourceIT` : `${entity.primaryKey[0].entity.entityClass}ResourceIT`;
+        return `${resourceIt}.${prefix}${field.fieldNameUnderscored.toUpperCase()}`
+    }
+}
+_%>
     @Test
     void equalsVerifier() throws Exception {
         TestUtil.equalsVerifier(<%= asEntity(entityClass) %>.class);
     <%_if (!embedded) { _%>
-        <%= asEntity(entityClass) %> <%= asEntity(entityInstance) %>1 = new <%= asEntity(entityClass) %>();
-        <%= asEntity(entityInstance) %>1.setId(<% if (databaseType === 'sql' && hasOauthUser === true) { %>UUID.randomUUID().toString()<% } else if (primaryKeyType === 'Long') { %>1L<% } else if (primaryKeyType === 'String') { %>"id1"<% } else if (primaryKeyType === 'UUID') { %>UUID.randomUUID()<% } %>);
-        <%= asEntity(entityClass) %> <%= asEntity(entityInstance) %>2 = new <%= asEntity(entityClass) %>();
-        <%= asEntity(entityInstance) %>2.setId(<%= asEntity(entityInstance) %>1.getId());
-        assertThat(<%= asEntity(entityInstance) %>1).isEqualTo(<%= asEntity(entityInstance) %>2);
-        <%= asEntity(entityInstance) %>2.setId(<% if (databaseType === 'sql' && hasOauthUser === true) { %>UUID.randomUUID().toString()<% } else if (primaryKeyType === 'Long') { %>2L<% } else if (primaryKeyType === 'String') { %>"id2"<% } else if (primaryKeyType === 'UUID') { %>UUID.randomUUID()<% } %>);
-        assertThat(<%= asEntity(entityInstance) %>1).isNotEqualTo(<%= asEntity(entityInstance) %>2);
-        <%= asEntity(entityInstance) %>1.setId(null);
-        assertThat(<%= asEntity(entityInstance) %>1).isNotEqualTo(<%= asEntity(entityInstance) %>2);
+        <%= asEntity(entityClass) %> <%= entityInstance %>1 = new <%= asEntity(entityClass) %>();
+        <%= entityInstance %>1.set<%= _.upperFirst(primaryKeyName) %>(<%= computeValue(this, 1) %>);
+        <%= asEntity(entityClass) %> <%= entityInstance %>2 = new <%= asEntity(entityClass) %>();
+        <%= entityInstance %>2.set<%= _.upperFirst(primaryKeyName) %>(<%= computeValue(this, 1) %>);
+        assertThat(<%= entityInstance %>1).isEqualTo(<%= entityInstance %>2);
+        <%= entityInstance %>2.set<%= _.upperFirst(primaryKeyName) %>(<%= computeValue(this, 2) %>);
+        assertThat(<%= entityInstance %>1).isNotEqualTo(<%= entityInstance %>2);
+        <%= entityInstance %>1.set<%= _.upperFirst(primaryKeyName) %>(null);
+        assertThat(<%= entityInstance %>1).isNotEqualTo(<%= entityInstance %>2);
     <%_} _%>
     }
 }

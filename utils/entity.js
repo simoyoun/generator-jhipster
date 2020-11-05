@@ -19,7 +19,6 @@
 
 const _ = require('lodash');
 const pluralize = require('pluralize');
-const { fieldIsEnum } = require('./field');
 const { createFaker } = require('./faker');
 const { parseLiquibaseChangelogDate } = require('./liquibase');
 const { entityDefaultConfig } = require('../generators/generator-defaults');
@@ -27,6 +26,7 @@ const { stringHashCode } = require('../generators/utils');
 
 const BASE_TEMPLATE_DATA = {
     primaryKeyType: undefined,
+    primaryKeyName: undefined,
     skipUiGrouping: false,
     haveFieldWithJavadoc: false,
     existingEnum: false,
@@ -53,10 +53,6 @@ const BASE_TEMPLATE_DATA = {
     fieldsIsReactAvField: false,
 
     get otherRelationships() {
-        return [];
-    },
-
-    get idFields() {
         return [];
     },
 
@@ -162,84 +158,30 @@ function prepareEntityForTemplates(entityWithConfig, generator) {
         hasBuiltInUserField &&
         entityWithConfig.dto === 'no';
 
-    entityWithConfig.derivedPrimaryKey = entityWithConfig.relationships.some(relationship => relationship.useJPADerivedIdentifier === true);
+    entityWithConfig.fields
+        .filter(field => field.options)
+        .forEach(field => {
+            _.defaults(field, {
+                id: field.options.id,
+            });
+        });
 
-    if (!entityWithConfig.embedded && !entityWithConfig.derivedPrimaryKey) {
-        entityWithConfig.idFields = entityWithConfig.fields.filter(field => field.id);
-        if (entityWithConfig.idFields.length > 0) {
-            if (entityWithConfig.idFields.length === 1) {
-                const idField = entityWithConfig.idFields[0];
-                // Allow ids type to be empty and fallback to default type for the database.
-                if (!idField.fieldType) {
-                    idField.fieldType = generator.getPkType(entityWithConfig.databaseType);
-                }
-                entityWithConfig.primaryKeyType = idField.fieldType;
-            } else {
-                throw new Error('Composite id not implemented');
-            }
-        } else {
-            entityWithConfig.primaryKeyType = generator.getPkType(entityWithConfig.databaseType);
-            const idField = {
-                fieldName: 'id',
-                fieldType: entityWithConfig.primaryKeyType,
-                id: true,
-                fieldNameHumanized: 'ID',
-                fieldTranslationKey: 'global.field.id',
-            };
-            entityWithConfig.idFields.push(idField);
-            entityWithConfig.fields.unshift(idField);
-        }
+    entityWithConfig.relationships
+        .filter(r => r.options)
+        .forEach(r => {
+            // in case of OneToOne relationship a new field is added marked as id
+            r.id = r.options.id && r.relationshipType === 'many-to-one';
+            _.defaults(r, {
+                useJPADerivedIdentifier: r.useJPADerivedIdentifier || (r.options.id && r.relationshipType === 'one-to-one' && r.ownerSide),
+            });
+        });
+
+    if (!entityWithConfig.embedded) {
+        generator.initIdField(entityWithConfig, entityWithConfig.databaseType);
     }
 
-    entityWithConfig.fields.forEach(field => {
-        const fieldType = field.fieldType;
-        if (!['Instant', 'ZonedDateTime', 'Boolean'].includes(fieldType)) {
-            entityWithConfig.fieldsIsReactAvField = true;
-        }
-
-        if (field.javadoc) {
-            entityWithConfig.haveFieldWithJavadoc = true;
-        }
-
-        if (fieldIsEnum(fieldType)) {
-            entityWithConfig.i18nToLoad.push(field.enumInstance);
-        }
-
-        if (fieldType === 'ZonedDateTime') {
-            entityWithConfig.fieldsContainZonedDateTime = true;
-            entityWithConfig.fieldsContainDate = true;
-        } else if (fieldType === 'Instant') {
-            entityWithConfig.fieldsContainInstant = true;
-            entityWithConfig.fieldsContainDate = true;
-        } else if (fieldType === 'Duration') {
-            entityWithConfig.fieldsContainDuration = true;
-        } else if (fieldType === 'LocalDate') {
-            entityWithConfig.fieldsContainLocalDate = true;
-            entityWithConfig.fieldsContainDate = true;
-        } else if (fieldType === 'BigDecimal') {
-            entityWithConfig.fieldsContainBigDecimal = true;
-        } else if (fieldType === 'UUID') {
-            entityWithConfig.fieldsContainUUID = true;
-        } else if (fieldType === 'byte[]' || fieldType === 'ByteBuffer') {
-            entityWithConfig.blobFields.push(field);
-            entityWithConfig.fieldsContainBlob = true;
-            if (field.fieldTypeBlobContent === 'image') {
-                entityWithConfig.fieldsContainImageBlob = true;
-            }
-            if (field.fieldTypeBlobContent !== 'text') {
-                entityWithConfig.fieldsContainBlobOrImage = true;
-            } else {
-                entityWithConfig.fieldsContainTextBlob = true;
-            }
-        }
-
-        if (Array.isArray(field.fieldValidateRules) && field.fieldValidateRules.length >= 1) {
-            entityWithConfig.validation = true;
-        }
-    });
-
     entityWithConfig.generateFakeData = type => {
-        const fieldsToGenerate = type === 'cypress' ? entityWithConfig.fields.filter(field => !field.id) : entityWithConfig.fields;
+        const fieldsToGenerate = entityWithConfig.fields.filter(field => !field.autoIncrement);
         const fieldEntries = fieldsToGenerate.map(field => {
             const fieldData = field.generateFakeData(type);
             if (!field.nullable && fieldData === null) return undefined;
@@ -254,6 +196,56 @@ function prepareEntityForTemplates(entityWithConfig, generator) {
     };
 
     return entityWithConfig;
+}
+
+function computePrimaryKeyIfNotComputed(entityWithConfig, generator) {
+    if (!entityWithConfig.primaryKey) {
+        entityWithConfig.primaryKey = [
+            ...entityWithConfig.fields
+                .filter(f => f.id)
+                .map(field => ({
+                    field,
+                    name: field.fieldName,
+                    nameDotted: field.fieldName,
+                    entity: entityWithConfig,
+                    usedRelationships: [],
+                    autoIncrement: field.autoIncrement,
+                })),
+            ...entityWithConfig.relationships
+                .filter(r => r.id)
+                .flatMap(relationship => {
+                    const otherEntity = generator.configOptions.sharedEntities[_.upperFirst(relationship.otherEntityName)];
+                    computePrimaryKeyIfNotComputed(otherEntity, generator);
+                    return otherEntity.primaryKey.map(pk => {
+                        return {
+                            field: pk.field,
+                            name: `${relationship.relationshipName}${pk.nameCapitalized}`,
+                            nameDotted: `${relationship.relationshipName}.${pk.name}`,
+                            entity: pk.entity,
+                            usedRelationships: [relationship, ...pk.usedRelationships],
+                        };
+                    });
+                }),
+        ];
+        if (entityWithConfig.primaryKey.length === 1) {
+            entityWithConfig.primaryKeyType = entityWithConfig.primaryKey[0].field.fieldType;
+            entityWithConfig.primaryKeyName = entityWithConfig.primaryKey[0].name;
+            if (entityWithConfig.primaryKey[0].name === 'id' && entityWithConfig.primaryKeyType === 'Long') {
+                entityWithConfig.primaryKey[0].field.autoIncrement = true;
+                entityWithConfig.primaryKey[0].autoIncrement = true;
+            }
+        } else {
+            entityWithConfig.primaryKeyType = `${entityWithConfig.entityClass}Id`;
+            entityWithConfig.primaryKeyName = 'id';
+        }
+        entityWithConfig.primaryKey.forEach(pk => {
+            pk.nameUnderscored = _.snakeCase(pk.name);
+            pk.nameCapitalized = _.upperFirst(pk.name);
+            pk.columnName = generator.getColumnName(pk.nameDotted.replace(/\./, '_'));
+            pk.setter = `set${pk.nameCapitalized}`;
+            pk.getter = (pk.field.fieldType === 'Boolean' ? 'is' : 'get') + pk.nameCapitalized;
+        });
+    }
 }
 
 /**
@@ -277,4 +269,4 @@ function loadRequiredConfigIntoEntity(entity, config) {
     return entity;
 }
 
-module.exports = { prepareEntityForTemplates, loadRequiredConfigIntoEntity };
+module.exports = { prepareEntityForTemplates, loadRequiredConfigIntoEntity, computePrimaryKeyIfNotComputed };

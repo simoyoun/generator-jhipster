@@ -51,6 +51,9 @@ import java.util.Optional;
 <%_ if (primaryKeyType === 'UUID') { _%>
 import java.util.UUID;
 <%_ } _%>
+<%_ if (primaryKey.length > 1) { _%>
+import <%=packageName%>.domain.<%=primaryKeyType%>;
+<%_ } _%>
 
 /**
  * Service Interface for managing {@link <% if (dto === 'mapstruct') { %><%= packageName %>.domain.<% } %><%= asEntity(entityClass) %>}.

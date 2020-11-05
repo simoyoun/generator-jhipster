@@ -156,6 +156,49 @@ function prepareFieldForTemplates(entityWithConfig, field, generator) {
         fieldTranslationKey: `${entityWithConfig.i18nKeyPrefix}.${field.fieldName}`,
     });
     const fieldType = field.fieldType;
+    if (!['Instant', 'ZonedDateTime', 'Boolean'].includes(fieldType)) {
+        entityWithConfig.fieldsIsReactAvField = true;
+    }
+
+    if (field.javadoc) {
+        entityWithConfig.haveFieldWithJavadoc = true;
+    }
+
+    if (fieldIsEnum(fieldType)) {
+        entityWithConfig.i18nToLoad.push(field.enumInstance);
+    }
+
+    if (fieldType === 'ZonedDateTime') {
+        entityWithConfig.fieldsContainZonedDateTime = true;
+        entityWithConfig.fieldsContainDate = true;
+    } else if (fieldType === 'Instant') {
+        entityWithConfig.fieldsContainInstant = true;
+        entityWithConfig.fieldsContainDate = true;
+    } else if (fieldType === 'Duration') {
+        entityWithConfig.fieldsContainDuration = true;
+    } else if (fieldType === 'LocalDate') {
+        entityWithConfig.fieldsContainLocalDate = true;
+        entityWithConfig.fieldsContainDate = true;
+    } else if (fieldType === 'BigDecimal') {
+        entityWithConfig.fieldsContainBigDecimal = true;
+    } else if (fieldType === 'UUID') {
+        entityWithConfig.fieldsContainUUID = true;
+    } else if (fieldType === 'byte[]' || fieldType === 'ByteBuffer') {
+        entityWithConfig.blobFields.push(field);
+        entityWithConfig.fieldsContainBlob = true;
+        if (field.fieldTypeBlobContent === 'image') {
+            entityWithConfig.fieldsContainImageBlob = true;
+        }
+        if (field.fieldTypeBlobContent !== 'text') {
+            entityWithConfig.fieldsContainBlobOrImage = true;
+        } else {
+            entityWithConfig.fieldsContainTextBlob = true;
+        }
+    }
+
+    if (Array.isArray(field.fieldValidateRules) && field.fieldValidateRules.length >= 1) {
+        entityWithConfig.validation = true;
+    }
 
     field.fieldIsEnum = !field.id && fieldIsEnum(fieldType);
     field.fieldWithContentType = (fieldType === 'byte[]' || fieldType === 'ByteBuffer') && field.fieldTypeBlobContent !== 'text';
@@ -217,7 +260,7 @@ function prepareFieldForTemplates(entityWithConfig, field, generator) {
     }
 
     field.fieldValidate = Array.isArray(field.fieldValidateRules) && field.fieldValidateRules.length >= 1;
-    field.nullable = !(field.fieldValidate === true && field.fieldValidateRules.includes('required'));
+    field.nullable = !(field.fieldValidate === true && field.fieldValidateRules.includes('required')) && !field.id;
     field.unique = field.fieldValidate === true && field.fieldValidateRules.includes('unique');
     if (field.unique) {
         field.uniqueConstraintName = generator.getUXConstraintName(
@@ -229,27 +272,30 @@ function prepareFieldForTemplates(entityWithConfig, field, generator) {
     if (field.fieldValidate === true && field.fieldValidateRules.includes('maxlength')) {
         field.maxlength = field.fieldValidateRulesMaxlength || 255;
     }
+    if (field.fieldValidate) {
+        field.validators = generator.computeValidationAnnotations(field);
+    }
 
     const faker = entityWithConfig.faker;
     field.createRandexp = () => faker.createRandexp(field.fieldValidateRulesPattern);
 
-    field.uniqueValue = [];
+    field.fakeValues = [];
 
     field.generateFakeData = (type = 'csv') => {
         let data = generateFakeDataForField(field, faker, entityWithConfig.changelogDateForRecent, type);
         // manage uniqueness
         if (field.fieldValidate === true && field.fieldValidateRules.includes('unique')) {
             let i = 0;
-            while (field.uniqueValue.indexOf(data) !== -1) {
+            while (field.fakeValues.indexOf(data) !== -1) {
                 if (i++ === 5) {
                     data = undefined;
                     break;
                 }
                 data = generateFakeDataForField(field, faker, entityWithConfig.changelogDateForRecent, type);
             }
-            if (data !== undefined) {
-                field.uniqueValue.push(data);
-            }
+        }
+        if (data !== undefined) {
+            field.fakeValues.push(data);
         }
         if (data === undefined) {
             generator.warning(`Error generating fake data for field ${field.fieldName}`);
@@ -257,6 +303,12 @@ function prepareFieldForTemplates(entityWithConfig, field, generator) {
         return data;
     };
     field.reference = fieldToReference(entityWithConfig, field);
+    field.getFakeValue = lineNb => {
+        while (field.fakeValues[lineNb - 1] === undefined) {
+            field.generateFakeData();
+        }
+        return field.fakeValues[lineNb - 1];
+    };
     return field;
 }
 
